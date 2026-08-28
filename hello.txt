@@ -3,3 +3,5 @@ zen-tests fixture
 cli 20260828102133-8244 A
 
 harness: CLI SHA B 20260828102133-8244
+
+harness: CLI SHA C while dirty 20260828102133-8244
