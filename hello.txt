@@ -1,3 +1,5 @@
 zen-tests fixture
 
 cli 20260828104802-13912 A
+
+harness: CLI SHA C while dirty 20260828104802-13912
