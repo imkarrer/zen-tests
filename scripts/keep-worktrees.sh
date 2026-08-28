@@ -295,7 +295,8 @@ if [[ -d "$BOT_B_WT" ]]; then
 	fi
 
 	: >"$ZEN_HOME/state/watch.log"
-	gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -F draft=true >/dev/null
+	gh pr ready "$BOT_B" --repo "$FULL_NAME" --undo
+	wait_for "PR #$BOT_B is draft" 30 pr_draft_state "$BOT_B" true || fail "could not convert #$BOT_B to draft"
 	sleep 20
 	OID_DRAFT=$(sha_head "$BOT_B_WT")
 	push_pr_commit "$BOT_B_BRANCH" "harness: bot while draft ${BOT_B_MARKER}"
@@ -305,7 +306,8 @@ if [[ -d "$BOT_B_WT" ]]; then
 	else
 		pass "watch left draft #$BOT_B alone"
 	fi
-	gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -F draft=false >/dev/null
+	gh pr ready "$BOT_B" --repo "$FULL_NAME"
+	wait_for "PR #$BOT_B is ready" 30 pr_draft_state "$BOT_B" false || fail "could not mark #$BOT_B ready"
 	wait_for "watch catch-up after undraft #$BOT_B" 90 heads_match "$BOT_B_WT" "$BOT_B" || fail "watch did not catch up after undraft"
 	if [[ "$(sha_head "$BOT_B_WT")" == "$(pr_oid "$BOT_B")" ]]; then
 		pass "watch caught up after undraft"

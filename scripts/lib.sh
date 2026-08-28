@@ -100,6 +100,10 @@ heads_match() {
 	[[ $(sha_head "$1") == $(pr_oid "$2") ]]
 }
 
+pr_draft_state() {
+	[[ $(gh pr view "$1" --repo "$FULL_NAME" --json isDraft --jq .isDraft) == "$2" ]]
+}
+
 push_pr_commit() {
 	local branch=$1
 	local msg=$2
