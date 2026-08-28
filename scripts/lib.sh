@@ -71,11 +71,25 @@ ensure_origin_clone() {
 		git clone "$ORIGIN_URL" "$ORIGIN_CLONE"
 	else
 		git -C "$ORIGIN_CLONE" fetch origin
-		git -C "$ORIGIN_CLONE" checkout -q --detach origin/HEAD 2>/dev/null || git -C "$ORIGIN_CLONE" checkout -q main
+		git -C "$ORIGIN_CLONE" checkout -q --detach origin/main 2>/dev/null || git -C "$ORIGIN_CLONE" checkout -q main
 	fi
 }
 
-# True when GitHub's PR head SHA is set and not equal to $2 (a previous SHA).
+# Open a self-authored PR from $ROOT. Prints the PR number on stdout.
+open_cli_pr() {
+	local marker=$1
+	local branch="harness/cli-${marker}"
+	git -C "$ROOT" checkout -q -B "$branch" origin/main || return 1
+	printf '\ncli %s A\n' "$marker" >>"$ROOT/hello.txt"
+	git -C "$ROOT" add hello.txt
+	git -C "$ROOT" commit -q -m "harness: CLI SHA A ${marker}" || return 1
+	git -C "$ROOT" push -q -u origin "$branch" || return 1
+	local url
+	url=$(gh pr create --repo "$FULL_NAME" --head "$branch" --title "harness cli ${marker}" \
+		--body "zen-tests CLI catch-up. Safe to close.") || return 1
+	gh pr view "$url" --json number --jq .number
+}
+
 pr_moved() {
 	local got
 	got=$(pr_oid "$1")
@@ -84,21 +98,6 @@ pr_moved() {
 
 heads_match() {
 	[[ $(sha_head "$1") == $(pr_oid "$2") ]]
-}
-
-# Open a self-authored PR from $ROOT. Prints the PR number.
-open_cli_pr() {
-	local marker=$1
-	local branch="harness/cli-${marker}"
-	git -C "$ROOT" checkout -q -B "$branch" origin/HEAD
-	printf '\ncli %s A\n' "$marker" >>"$ROOT/hello.txt"
-	git -C "$ROOT" add hello.txt
-	git -C "$ROOT" commit -q -m "harness: CLI SHA A ${marker}"
-	git -C "$ROOT" push -q -u origin "$branch"
-	local url
-	url=$(gh pr create --repo "$FULL_NAME" --head "$branch" --title "harness cli ${marker}" \
-		--body "zen-tests CLI catch-up. Safe to close.")
-	gh pr view "$url" --json number --jq .number
 }
 
 push_pr_commit() {

@@ -70,8 +70,12 @@ ensure_origin_clone
 
 # --- CLI path (self-authored PR; watch will not see it) ---
 write_config "$(authors_yaml_lines "$LOGIN")"
-CLI_MARKER="cli-${RUN_ID}"
+CLI_MARKER="${RUN_ID}"
 CLI_PR=$(open_cli_pr "$CLI_MARKER")
+if [[ -z "$CLI_PR" || "$CLI_PR" == *[!0-9]* ]]; then
+	echo "open_cli_pr failed: ${CLI_PR:-empty}" >&2
+	exit 1
+fi
 CLEANUP_PRS+=("$CLI_PR")
 CLI_BRANCH="harness/cli-${CLI_MARKER}"
 echo "CLI PR #$CLI_PR ($CLI_BRANCH)"
