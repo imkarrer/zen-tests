@@ -3,3 +3,5 @@ zen-tests fixture
 bot botB-20260828110053-16177
 
 harness: bot SHA move botB-20260828110053-16177
+
+harness: bot while draft botB-20260828110053-16177
