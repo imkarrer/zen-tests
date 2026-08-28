@@ -1,5 +1,1 @@
-zen-tests fixture
-
-cli 20260828124150-31158 A
-
-harness: CLI SHA C while dirty 20260828124150-31158
+rewritten 20260828124150-31158
