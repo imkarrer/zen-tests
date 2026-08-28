@@ -1,0 +1,42 @@
+name: open-review-pr
+
+# Opens a PR as github-actions[bot] and requests the repo owner as reviewer.
+# Watch/inbox tests need that: GitHub will not let you request a review from
+# yourself, so a self-authored PR never appears in review-requested:@me.
+
+on:
+  workflow_dispatch:
+    inputs:
+      marker:
+        description: Unique string included in the PR title
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open PR and request owner
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MARKER: ${{ github.event.inputs.marker }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="harness/bot-${MARKER}"
+          git checkout -b "$branch"
+          printf '\nbot %s\n' "$MARKER" >> hello.txt
+          git add hello.txt
+          git commit -m "harness: bot PR ${MARKER}"
+          git push origin "$branch"
+          gh pr create \
+            --title "harness review ${MARKER}" \
+            --body "Opened by Actions so the owner can be a requested reviewer. Safe to close." \
+            --reviewer "$OWNER"
