@@ -109,7 +109,12 @@ else
 fi
 CTX_A=$(cksum <"$WT/CLAUDE.local.md" | awk '{print $1}')
 
-push_pr_commit "$CLI_BRANCH" "harness: CLI SHA B ${CLI_MARKER}"
+# New file so rendered context (changed-file list) is not identical to A.
+git -C "$ROOT" checkout -q "$CLI_BRANCH"
+printf 'b-file %s\n' "$CLI_MARKER" >"$ROOT/b-${CLI_MARKER}.txt"
+git -C "$ROOT" add "b-${CLI_MARKER}.txt"
+git -C "$ROOT" commit -q -m "harness: CLI SHA B ${CLI_MARKER}"
+git -C "$ROOT" push -q origin "$CLI_BRANCH"
 wait_for "GitHub SHA B for #$CLI_PR" 60 pr_moved "$CLI_PR" "$OID_A" || fail "GitHub did not move to SHA B"
 OID_B=$(pr_oid "$CLI_PR")
 
@@ -153,16 +158,16 @@ else
 	pass "clean worktree caught up to C"
 fi
 
-# Live agent skip
-mkdir -p "$ZEN_HOME/bin"
-cp /bin/sleep "$ZEN_HOME/bin/claude"
-chmod +x "$ZEN_HOME/bin/claude"
+# Live agent skip (process name must be claude so lsof -c claude sees it)
 push_pr_commit "$CLI_BRANCH" "harness: CLI SHA D while agent ${CLI_MARKER}"
 wait_for "GitHub SHA D for #$CLI_PR" 60 pr_moved "$CLI_PR" "$OID_C" || fail "GitHub did not move to SHA D"
 OID_D=$(pr_oid "$CLI_PR")
-(cd "$WT" && "$ZEN_HOME/bin/claude" 600) &
+(cd "$WT" && exec -a claude /bin/sleep 600) &
 FAKE_CLAUDE_PID=$!
 sleep 3
+if ! kill -0 "$FAKE_CLAUDE_PID" 2>/dev/null; then
+	fail "fake claude process exited before zen review"
+fi
 zen review "$CLI_PR" --repo "$REPO_SHORT" --json --no-terminal >/tmp/zen-review-agent.json || true
 if [[ "$(sha_head "$WT")" != "$OID_C" ]]; then
 	fail "live agent: worktree moved (HEAD $(sha_head "$WT"))"

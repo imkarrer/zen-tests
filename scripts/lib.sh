@@ -113,9 +113,9 @@ push_pr_commit() {
 # Trigger Actions to open a bot PR; print its number.
 open_bot_pr() {
 	local marker=$1
-	local i=0
+	local 	i=0
 	while ((i < 90)); do
-		if gh workflow run open-review-pr.yml --repo "$FULL_NAME" -f "marker=${marker}" 2>/dev/null; then
+		if gh workflow run open-review-pr.yml --repo "$FULL_NAME" -f "marker=${marker}"; then
 			break
 		fi
 		sleep 5

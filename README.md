@@ -12,7 +12,7 @@ The default branch is a tiny fixture (`hello.txt`). Scripts under `scripts/` dri
 |---|---|
 | SHA A → B, worktree + `CLAUDE.local.md` catch up | `zen review --json --no-terminal` |
 | Dirty worktree: files not discarded | tracked edit, then review |
-| Live agent (`claude` cwd in the tree): skip | named `sleep` binary |
+| Live agent (`claude` cwd in the tree): skip | `exec -a claude /bin/sleep` |
 | Force-push: `--json` does not reset; `y` on a TTY does | rewrite + `git push --force-with-lease` |
 | Inbox “new” without `authors:` / no worktree | Actions bot PR + requested reviewer |
 | Upgrade: `seen_prs` does not re-announce | `last_check.json` before first poll |
@@ -29,6 +29,12 @@ Merged cleanup is not in this script (`cleanup_after_days` cannot be 0). That st
 - Write access to **your fork** of this repo (or this repo, if you are a collaborator). The script opens PRs on `origin`.
 
 You do not need Aider, Terminal.app, or your daily `~/.zen/config.yaml`. The script writes a throwaway config (`agent: claude`, `terminal: iterm`).
+
+Watch/inbox scenarios use [`.github/workflows/open-review-pr.yml`](.github/workflows/open-review-pr.yml). The repo must allow GitHub Actions to create PRs:
+
+Settings → Actions → General → Workflow permissions → **Read and write** and **Allow GitHub Actions to create and approve pull requests**.
+
+On a new GitHub repo the default is read-only; `gh api --method PUT /repos/<you>/zen-tests/actions/permissions/workflow -f default_workflow_permissions=write` is the API equivalent.
 
 ## Run
 
