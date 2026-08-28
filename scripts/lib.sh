@@ -115,7 +115,7 @@ open_bot_pr() {
 	local marker=$1
 	local 	i=0
 	while ((i < 90)); do
-		if gh workflow run open-review-pr.yml --repo "$FULL_NAME" -f "marker=${marker}"; then
+		if gh workflow run open-review-pr.yml --repo "$FULL_NAME" -f "marker=${marker}" >/dev/null; then
 			break
 		fi
 		sleep 5

@@ -158,16 +158,21 @@ else
 	pass "clean worktree caught up to C"
 fi
 
-# Live agent skip (process name must be claude so lsof -c claude sees it)
+# Live agent skip: binary named claude in the worktree cwd. macOS ps comm is a
+# path; zen matches filepath.Base. lsof -c matches the executable name.
+mkdir -p "$ZEN_HOME/bin"
+printf '#include <unistd.h>\nint main(void) { for (;;) sleep(60); return 0; }\n' | cc -o "$ZEN_HOME/bin/claude" -x c - || {
+	fail "could not compile fake claude (need a C compiler)"
+}
 push_pr_commit "$CLI_BRANCH" "harness: CLI SHA D while agent ${CLI_MARKER}"
 wait_for "GitHub SHA D for #$CLI_PR" 60 pr_moved "$CLI_PR" "$OID_C" || fail "GitHub did not move to SHA D"
 OID_D=$(pr_oid "$CLI_PR")
-(cd "$WT" && exec -a claude /bin/sleep 600) &
+(cd "$WT" && "$ZEN_HOME/bin/claude") &
 FAKE_CLAUDE_PID=$!
-sleep 3
-if ! kill -0 "$FAKE_CLAUDE_PID" 2>/dev/null; then
-	fail "fake claude process exited before zen review"
-fi
+claude_in_wt() { lsof -nP -a -d cwd -c claude -Fn 2>/dev/null | grep -Fq "$WT"; }
+wait_for "lsof sees claude in worktree" 15 claude_in_wt || {
+	fail "lsof did not see fake claude (pid $FAKE_CLAUDE_PID comm=$(ps -p $FAKE_CLAUDE_PID -o comm= 2>/dev/null))"
+}
 zen review "$CLI_PR" --repo "$REPO_SHORT" --json --no-terminal >/tmp/zen-review-agent.json || true
 if [[ "$(sha_head "$WT")" != "$OID_C" ]]; then
 	fail "live agent: worktree moved (HEAD $(sha_head "$WT"))"
