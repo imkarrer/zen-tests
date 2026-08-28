@@ -39,8 +39,10 @@ if [[ -z "${ZEN_BIN:-}" || ! -x "$ZEN_BIN" ]]; then
 	exit 1
 fi
 
+cd "$ROOT"
+unset GH_REPO
 FULL_NAME=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-ORIGIN_URL=$(git -C "$ROOT" remote get-url origin)
+ORIGIN_URL=$(git remote get-url origin)
 LOGIN=$(gh api user --jq .login)
 export FULL_NAME ORIGIN_URL LOGIN ROOT ZEN_HOME BASE_PATH ORIGIN_CLONE REPO_SHORT ZEN_BIN
 
