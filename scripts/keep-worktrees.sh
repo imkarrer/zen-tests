@@ -67,6 +67,8 @@ trap cleanup EXIT
 rm -rf "$ZEN_HOME"
 mkdir -p "$ZEN_HOME/state" "$BASE_PATH"
 ensure_origin_clone
+echo "Closing leftover harness PRs from earlier runs..."
+close_open_harness_prs
 
 # --- CLI path (self-authored PR; watch will not see it) ---
 write_config "$(authors_yaml_lines "$LOGIN")"
@@ -263,7 +265,7 @@ fi
 # Create + FF: put the bot in authors:
 zen watch stop
 WATCH_STARTED=0
-write_config "$(authors_yaml_lines "$LOGIN" "github-actions[bot]")"
+write_config "$(authors_yaml_lines "$LOGIN" "github-actions" "github-actions[bot]")"
 : >"$ZEN_HOME/state/watch.log"
 # already notified_new from previous polls; drop state so create still runs
 # (create does not depend on notified_new). Keep applied_shas empty.
@@ -279,45 +281,44 @@ BOT_B_WT=$(worktree_path "$BOT_B")
 wait_for "watch created worktree #$BOT_B" 120 test -d "$BOT_B_WT" || fail "timeout waiting for worktree #$BOT_B"
 if [[ -d "$BOT_B_WT" ]]; then
 	pass "watch created worktree for bot author #$BOT_B"
+	OID_BOT_B0=$(sha_head "$BOT_B_WT")
+	BOT_B_BRANCH=$(gh pr view "$BOT_B" --repo "$FULL_NAME" --json headRefName --jq .headRefName)
+	git -C "$ROOT" fetch -q origin "$BOT_B_BRANCH"
+	git -C "$ROOT" checkout -q -B "$BOT_B_BRANCH" "origin/$BOT_B_BRANCH"
+	push_pr_commit "$BOT_B_BRANCH" "harness: bot SHA move ${BOT_B_MARKER}"
+	wait_for "GitHub SHA move #$BOT_B" 60 pr_moved "$BOT_B" "$OID_BOT_B0" || fail "bot PR did not move on GitHub"
+	wait_for "watch FF #$BOT_B" 90 heads_match "$BOT_B_WT" "$BOT_B" || fail "watch did not fast-forward #$BOT_B"
+	if [[ "$(sha_head "$BOT_B_WT")" == "$(pr_oid "$BOT_B")" ]]; then
+		pass "watch fast-forwarded #$BOT_B"
+	else
+		fail "watch did not FF #$BOT_B (HEAD $(sha_head "$BOT_B_WT") GitHub $(pr_oid "$BOT_B"))"
+	fi
+
+	: >"$ZEN_HOME/state/watch.log"
+	gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -F draft=true >/dev/null
+	sleep 20
+	OID_DRAFT=$(sha_head "$BOT_B_WT")
+	push_pr_commit "$BOT_B_BRANCH" "harness: bot while draft ${BOT_B_MARKER}"
+	sleep 25
+	if [[ "$(sha_head "$BOT_B_WT")" != "$OID_DRAFT" ]]; then
+		fail "watch moved a draft while ignore_drafts is true"
+	else
+		pass "watch left draft #$BOT_B alone"
+	fi
+	gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -F draft=false >/dev/null
+	wait_for "watch catch-up after undraft #$BOT_B" 90 heads_match "$BOT_B_WT" "$BOT_B" || fail "watch did not catch up after undraft"
+	if [[ "$(sha_head "$BOT_B_WT")" == "$(pr_oid "$BOT_B")" ]]; then
+		pass "watch caught up after undraft"
+	else
+		fail "undraft did not catch up #$BOT_B"
+	fi
+	if grep -q "New PR review request: #${BOT_B}" "$ZEN_HOME/state/watch.log"; then
+		fail "undraft re-fired new-review notify for #$BOT_B"
+	else
+		pass "undraft did not send a second new-review notify"
+	fi
 else
 	fail "watch did not create $BOT_B_WT"
-fi
-OID_BOT_B0=$(sha_head "$BOT_B_WT")
-BOT_B_BRANCH=$(gh pr view "$BOT_B" --repo "$FULL_NAME" --json headRefName --jq .headRefName)
-git -C "$ROOT" fetch -q origin "$BOT_B_BRANCH"
-git -C "$ROOT" checkout -q -B "$BOT_B_BRANCH" "origin/$BOT_B_BRANCH"
-push_pr_commit "$BOT_B_BRANCH" "harness: bot SHA move ${BOT_B_MARKER}"
-wait_for "GitHub SHA move #$BOT_B" 60 pr_moved "$BOT_B" "$OID_BOT_B0" || fail "bot PR did not move on GitHub"
-wait_for "watch FF #$BOT_B" 90 heads_match "$BOT_B_WT" "$BOT_B" || fail "watch did not fast-forward #$BOT_B"
-if [[ "$(sha_head "$BOT_B_WT")" == "$(pr_oid "$BOT_B")" ]]; then
-	pass "watch fast-forwarded #$BOT_B"
-else
-	fail "watch did not FF #$BOT_B (HEAD $(sha_head "$BOT_B_WT") GitHub $(pr_oid "$BOT_B"))"
-fi
-
-# Draft → push → undraft: one refresh, not a new notify
-: >"$ZEN_HOME/state/watch.log"
-gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -f draft=true >/dev/null
-sleep 20
-OID_DRAFT=$(sha_head "$BOT_B_WT")
-push_pr_commit "$BOT_B_BRANCH" "harness: bot while draft ${BOT_B_MARKER}"
-sleep 25
-if [[ "$(sha_head "$BOT_B_WT")" != "$OID_DRAFT" ]]; then
-	fail "watch moved a draft while ignore_drafts is true"
-else
-	pass "watch left draft #$BOT_B alone"
-fi
-gh api -X PATCH "repos/${FULL_NAME}/pulls/${BOT_B}" -F draft=false >/dev/null
-wait_for "watch catch-up after undraft #$BOT_B" 90 heads_match "$BOT_B_WT" "$BOT_B" || fail "watch did not catch up after undraft"
-if [[ "$(sha_head "$BOT_B_WT")" == "$(pr_oid "$BOT_B")" ]]; then
-	pass "watch caught up after undraft"
-else
-	fail "undraft did not catch up #$BOT_B"
-fi
-if grep -q "New PR review request: #${BOT_B}" "$ZEN_HOME/state/watch.log"; then
-	fail "undraft re-fired new-review notify for #$BOT_B"
-else
-	pass "undraft did not send a second new-review notify"
 fi
 
 zen watch stop

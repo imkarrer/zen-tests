@@ -62,7 +62,7 @@ EOF
 authors_yaml_lines() {
 	local a
 	for a in "$@"; do
-		printf '  - %s\n' "$a"
+		printf '  - "%s"\n' "$a"
 	done
 }
 
@@ -142,5 +142,14 @@ open_bot_pr() {
 
 close_pr() {
 	local n=$1
+	[[ "$n" =~ ^[0-9]+$ ]] || return 0
 	gh pr close "$n" --repo "$FULL_NAME" --delete-branch --comment "zen-tests run ${RUN_ID} finished." >/dev/null 2>&1 || true
+}
+
+close_open_harness_prs() {
+	local n
+	while read -r n; do
+		[[ -n "$n" ]] || continue
+		close_pr "$n"
+	done < <(gh pr list --repo "$FULL_NAME" --state open --json number,title --jq '.[] | select(.title|test("^harness ")) | .number')
 }
