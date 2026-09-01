@@ -21,6 +21,28 @@ The default branch is a tiny fixture (`hello.txt`). Scripts under `scripts/` dri
 
 Merged cleanup is not in this script (`cleanup_after_days` cannot be 0). That stays a unit test.
 
+[`scripts/worktree-layout.sh`](scripts/worktree-layout.sh) covers `worktree_layout`, the sibling-vs-nested worktree placement setting ([zen#25](https://github.com/mgreau/zen/pull/25)):
+
+| Scenario | How |
+|---|---|
+| Default config places worktrees beside the clone | `zen work new --no-terminal`, no `worktree_layout` key |
+| `nested` places them in `<clone>/_worktrees/` | `worktree_layout: nested` |
+| The clone's `git status` stays clean | `info/exclude` + `git check-ignore -q` |
+| The committed `.gitignore` is never written | file absence |
+| Transition: a sibling worktree is still found under `nested` | create under default, re-run under `nested` |
+| No duplicate worktree, both listed during the drain | `zen work` |
+| Per-repo `worktree_layout` beats the global default | second repo with an override |
+| An invalid layout fails at load, not silently | `worktree_layout: bogus` |
+| The real `~/.zen` and real checkouts are untouched | checksum before/after |
+
+Unlike `keep-worktrees.sh`, this one is **fully local**: `origin` is a bare repo under `.run/`, so it needs no `gh`, no GitHub, and no PRs.
+
+It also does **not** rely on `ZEN_HOME`. That variable only exists on an unmerged branch; a binary built from `main` ignores it and silently falls back to your real `~/.zen`, which is worse than no isolation because the harness looks sandboxed. This script pins `HOME` at a sandbox under `.run/` instead — which zen on any branch honours, and which keeps `~/.claude/projects` out of the way too. The last test asserts the real `~/.zen` is byte-for-byte unchanged.
+
+```bash
+ZEN_BIN=/path/to/zen ./scripts/worktree-layout.sh
+```
+
 ## Requirements
 
 - `gh` authenticated (`gh auth login`)
