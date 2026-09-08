@@ -35,6 +35,25 @@ zen() {
 	ZEN_HOME="$ZEN_HOME" "$ZEN_BIN" "$@"
 }
 
+# zen_tty <answer> <args...> — run zen with a real terminal on stdin and type
+# answer into it. A plain pipe is not enough: zen declines confirmations that
+# do not come from a TTY, which is the point of the piped-input case below.
+# The sleeps give the child time to reach its prompt before the answer lands
+# and before script(1) closes the pty.
+zen_tty() {
+	local answer=$1
+	shift
+	if script -q /dev/null true >/dev/null 2>&1; then
+		# BSD/macOS script: command follows the typescript file.
+		{ sleep 1; printf '%s\n' "$answer"; sleep 1; } |
+			ZEN_HOME="$ZEN_HOME" script -q /dev/null "$ZEN_BIN" "$@" 2>&1 | tr -d '\r'
+	else
+		# util-linux script: command goes through -c.
+		{ sleep 1; printf '%s\n' "$answer"; sleep 1; } |
+			ZEN_HOME="$ZEN_HOME" script -q -e -c "$(printf '%q ' "$ZEN_BIN" "$@")" /dev/null 2>&1 | tr -d '\r'
+	fi
+}
+
 write_config() {
 	local authors_yaml=$1
 	mkdir -p "$ZEN_HOME/state" "$BASE_PATH"

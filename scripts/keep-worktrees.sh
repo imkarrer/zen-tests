@@ -209,11 +209,67 @@ if [[ "$(sha_head "$WT")" != "$HEAD_BEFORE_RESET" ]]; then
 else
 	pass "--json did not reset --hard"
 fi
-printf 'y\n' | zen review "$CLI_PR" --repo "$REPO_SHORT" --no-terminal >/tmp/zen-review-reset.txt || true
+# Piped stdin is not a confirmation. `yes | zen review` used to answer the
+# prompt and reset --hard with no human involved.
+printf 'y\n' | zen review "$CLI_PR" --repo "$REPO_SHORT" --no-terminal >/tmp/zen-review-piped.txt 2>&1 || true
+if [[ "$(sha_head "$WT")" != "$HEAD_BEFORE_RESET" ]]; then
+	fail "piped 'y' reset the worktree (HEAD $(sha_head "$WT"))"
+else
+	pass "piped 'y' did not reset --hard"
+fi
+# A real terminal does confirm.
+zen_tty y review "$CLI_PR" --repo "$REPO_SHORT" --no-terminal >/tmp/zen-review-reset.txt || true
 if [[ "$(sha_head "$WT")" != "$OID_R" ]]; then
 	fail "confirmed reset: HEAD $(sha_head "$WT") != $OID_R"
 else
 	pass "confirmed reset moved worktree onto rewritten head"
+fi
+
+# Backward force-push: GitHub's head becomes an ancestor of the worktree.
+# `git merge --ff-only` says "Already up to date" and moves nothing, which used
+# to be reported as an update on every poll.
+push_pr_commit "$CLI_BRANCH" "harness: CLI SHA E after reset ${CLI_MARKER}"
+wait_for "GitHub SHA E for #$CLI_PR" 60 pr_moved "$CLI_PR" "$OID_R" || fail "GitHub did not move to SHA E"
+OID_E=$(pr_oid "$CLI_PR")
+zen review "$CLI_PR" --repo "$REPO_SHORT" --json --no-terminal >/dev/null
+if [[ "$(sha_head "$WT")" != "$OID_E" ]]; then
+	fail "catch-up to E: HEAD $(sha_head "$WT") != $OID_E"
+else
+	pass "worktree caught up to E"
+fi
+git -C "$ROOT" checkout -q "$CLI_BRANCH"
+git -C "$ROOT" reset -q --hard HEAD~1
+git -C "$ROOT" push -q --force-with-lease origin "$CLI_BRANCH"
+wait_for "GitHub head rewound for #$CLI_PR" 60 pr_moved "$CLI_PR" "$OID_E" || fail "GitHub head did not rewind"
+OID_BACK=$(pr_oid "$CLI_PR")
+behind_ok=1
+for attempt in 1 2; do
+	err=/tmp/zen-review-behind-$attempt.err
+	zen review "$CLI_PR" --repo "$REPO_SHORT" --json --no-terminal >/dev/null 2>"$err" || true
+	if [[ "$(sha_head "$WT")" != "$OID_E" ]]; then
+		fail "backward force-push (poll $attempt): HEAD $(sha_head "$WT") != $OID_E"
+		behind_ok=0
+		break
+	fi
+	if grep -q "fast-forwarded PR #$CLI_PR" "$err"; then
+		fail "backward force-push (poll $attempt): claimed a fast-forward that did not happen"
+		behind_ok=0
+		break
+	fi
+	if ! grep -q "skipping reset for PR #$CLI_PR" "$err"; then
+		fail "backward force-push (poll $attempt): no skip logged ($(tr '\n' ' ' <"$err"))"
+		behind_ok=0
+		break
+	fi
+done
+if ((behind_ok)); then
+	pass "backward force-push skipped twice without claiming an update"
+fi
+zen_tty y review "$CLI_PR" --repo "$REPO_SHORT" --no-terminal >/tmp/zen-review-behind-reset.txt || true
+if [[ "$(sha_head "$WT")" != "$OID_BACK" ]]; then
+	fail "confirmed reset onto rewound head: HEAD $(sha_head "$WT") != $OID_BACK"
+else
+	pass "confirmed reset moved worktree onto the rewound head"
 fi
 
 # --- Watch / inbox (bot PR so we are a requested reviewer) ---
